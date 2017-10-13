@@ -1,0 +1,519 @@
+---
+title: "Symptom_Analysis"
+author: "P. Hoover"
+date: "August 14, 2017"
+output: 
+  html_document:
+    includes:
+      in_header: test.html
+    theme: flatly
+    highlight: tango
+
+---
+
+&nbsp; This file explores the symptomatology of service members both before and after a traumatic brain injury. The tajectory of symptoms will be assessed while comparing demographic differences, particularly gender. 
+
+```{r set environment, include=FALSE}
+#Load Libraries
+library(knitr) 
+library(rmarkdown)
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+library(tables)
+library(tidyr)
+library(lme4)
+library(DT)
+library(lmerTest)
+library(plotly)
+opts_chunk$set(fig.width=8,fig.height=8,echo=TRUE,warning=FALSE,message=FALSE) #set default code chunks
+
+#Load data
+load(file="final_df.RData")
+
+#Clean Branch of service
+#table(final_df$service_at_inj) #examine data integrity 
+final_df$service_at_inj<-sub(c("-R"),"",final_df$service_at_inj) #reformat service to remove reservists 
+
+final_df<-final_df%>%filter(gender=="MALE"|gender=="FEMALE") #remove those cases with unspecified genders 
+
+#Anxiety, cognitive, depression, neurologic, ptsd, sleep, stress, vision, headache
+
+#final_df2<-transform(final_df,id=as.numeric(factor(patient_hsdw_nk))) #set new patient id for data export
+#final_df2<-final_df2[,-c(1)] #remove hsdw_key
+#write.table(final_df2,file="final_df2.csv",sep="|") #write table out 
+```
+
+***
+
+#Demographics {.tabset}
+
+<center> <h4> Total Sample Population: &nbsp; `r length(unique(final_df$patient_hsdw_nk))` </center> </h4> 
+
+<center> <h4> Age at Injury: &nbsp; `r round(mean(final_df$age_of_inj),3)` </center> </h4>
+
+##Gender Distribution
+
+`r kable(final_df%>%group_by(gender)%>%tally(),align='c')`
+
+##Branch of Service 
+
+`r kable(final_df%>%group_by(service_at_inj)%>%tally(),align='c')`
+
+##War Related
+
+`r kable(final_df%>%group_by(war_related_inj)%>%tally(),align='c')`
+
+#Overall Change in Symptoms {.tabset}
+&nbsp; Average Change in Symptoms per response interval.
+
+##30 Days
+
+```{r 30 days, include=TRUE,fig.align='center'}
+means<-function(x){
+  round(mean(x,na.rm=TRUE),3)} #create mean function to ignore NA and round values 
+
+subs_p<-function(df,y,p){ #graphing function
+  a<-df[,grep(y,names(df))]  #subset based off of partial colname match
+  a[]<-ifelse(a>=1,1,ifelse(a==0,0,NA)) #recode to gain percentages of data (>=1,1)
+  a<-a%>%
+    summarise_all(funs(means))%>% #grab proportions
+    gather%>% #set to long version
+    mutate(prop=value*100)%>% #convert to percentage
+    filter(!grepl("_delta",key)) #remove percent delta for graphing 
+  a$session<-ifelse(grepl("\\pre_",a$key),"Pre","Post") #rename variables for easier graphing
+  a$key<-sub("pre_|pos_","",a$key) #Remove variable prefix for graphing
+  a$key<-sub(p,"",a$key) #remove for graphing (easier function below for this)
+  a$session<-factor(a$session,levels=c("Pre","Post")) #set to ordered factor for graphing order 
+  max=10*ceiling(max(a$prop)/10) #create max function to set graphing parameters specific to each subset function
+  ggplot(a,aes(fill=session))+geom_bar(aes(reorder(x=key,-prop),y=prop,colour=session),stat="identity",position="dodge")+xlab("Symptoms")+ylab("Proportion of Patients")+
+    scale_y_continuous(expand = c(0, 0))+theme(plot.title=element_text(hjust=0.5,vjust=1),axis.text.x=element_text(size=8, angle=45,hjust=0.95,vjust=0.1,margin=margin(-20,0,20,0)))+expand_limits(y=max)
+}
+
+subs_p(final_df,"\\_30","_30") +ggtitle("Proportional Comparisons of Symptoms 30 days Pre/Post Injury") #apply function
+
+subs_a<-function(df,x){  #graphing function
+  x<-df[,grep(x,names(df))]  #subset based on colnames 
+  x<-x%>% summarise_all(funs(means))%>% #calculate averages 
+    gather() #set to long version
+  ggplot(x)+geom_bar(aes(reorder(x=key,-value),y=value),stat="identity",position = "dodge",fill="navyblue")+xlab("Symptoms")+ylab("Average Symptom")+scale_y_continuous(expand = c(0, 0))+
+    theme(plot.title=element_text(hjust=0.5,vjust=1),axis.text.x=element_text(size=8, angle=45,hjust=0.95,vjust=0.1,margin=margin(-40,0,40,0)))
+}
+
+subs_a(final_df,"\\_30_delta")+ggtitle("Change in Symptoms at 30 Days Pre/Post Injury") #apply function to 30 days delta and add title 
+```
+
+##90 Days
+
+```{r 90 days, include=TRUE,fig.align='center'}
+subs_p(final_df,"\\_90","_90") +ggtitle("Proportional Comparisons of Symptoms 90 days Pre/Post Injury")
+
+subs_a(final_df,"\\_90_delta")+ggtitle("Change in Symptoms at 90 Days Pre/Post Injury")
+```
+
+##180 Days
+
+```{r 180 days, include=TRUE,fig.align='center'}
+subs_p(final_df,"\\_180","_180") +ggtitle("Proportional Comparisons of Symptoms 180 days Pre/Post Injury")
+
+subs_a(final_df,"\\_180_delta")+ggtitle("Change in Symptoms at 180 Days Pre/Post Injury")
+```
+
+##365 Days
+
+```{r 365 days, include=TRUE,fig.align='center'}
+subs_p(final_df,"\\_365","_365") +ggtitle("Proportional Comparisons of Symptoms 365 days Pre/Post Injury")
+
+subs_a(final_df,"\\_365_delta")+ggtitle("Change in Symptoms at 365 Dats Pre/Post Injury")
+```
+
+
+#Gender Differences {.tabset}
+
+##Gender Totals
+
+```{r gender totals, include=TRUE}
+sums<-function(x){
+  sum(x,na.rm=TRUE)} #tally function with NA restriction
+
+tot<-final_df%>% 
+  select(gender,pre_headache_30:vision_365_delta)%>% #select columns for subset 
+  group_by(gender)%>% #grouping on gender
+  summarise_all(funs(sums))%>% #find sums per gender on each column
+  gather(survey,score,-gender)%>% #set long version with restrictions
+  group_by(gender)%>% #regroup 
+  summarise(Totals=sum(score)) #find new column 
+  
+kable(tot) #table for totals per gender 
+
+```
+
+
+##Averages per Gender 
+
+```{r average s, include=TRUE}
+ave<-final_df%>%  #finding averages per gender on each column
+  select(gender,pre_headache_30:vision_365_delta)%>%
+  group_by(gender)%>%
+  summarise_all(funs(means))%>%
+  gather(survey,score,-gender) #set to long version
+
+ave<-dcast(ave,survey~gender) #spread data for table view
+
+#Average Number of Symptoms per Gender
+datatable(ave%>%filter(!grepl("\\_delta",survey)),rownames=FALSE,caption='Average Numer of Symptoms per Gender')  
+
+#Average Number of Symptoms Change per Gender
+datatable(ave%>%filter(grepl("\\_delta",survey)),rownames=FALSE,caption='Average Change in Symptoms per Gender')  
+
+prop<-final_df%>% #find totals per gender for proportional testing 
+  select(gender,pre_headache_30:vision_365_delta)%>%
+  group_by(gender)%>%
+  summarise_all(funs(sums))
+
+prop_pre_post<-prop[,!grepl("\\_delta",names(prop))] #remove change/delta columns 
+
+prop<-t(as.data.frame(prop_pre_post)) #transpose for analysis
+prop<-data.frame(names=row.names(prop),prop) #set as dataframe with rownames
+names<-prop[1,] 
+colnames(prop)<-as.character(unlist(prop[1,])) #set colnames to prop list 
+prop<-prop[-1,] #removefirst row
+prop$MALE<-as.numeric(prop$MALE) 
+prop$FEMALE<-as.numeric(prop$FEMALE)
+
+prop<-prop%>% #find proportions  totals
+  mutate(FEMALE_Per=round(FEMALE/sum(FEMALE)*100,2),MALE_Per=round(MALE/sum(MALE)*100,2))
+
+prop_pre<-prop%>%
+  filter(grepl("\\pre_",gender))%>%
+  mutate(FEMALE_Session_Per=round(FEMALE/sum(FEMALE)*100,2),MALE_Session_Per=round(MALE/sum(MALE)*100,2))
+
+prop_pos<-prop%>%
+  filter(grepl("\\pos_",gender))%>%
+  mutate(FEMALE_Session_Per=round(FEMALE/sum(FEMALE)*100,2),MALE_Session_Per=round(MALE/sum(MALE)*100,2))
+
+prop2<-rbind(prop_pre,prop_pos)
+names(prop2)<-paste(c("Symptom","Female_Tot_Ct","Male_Tot_Ct","Female_All_Perc","Male_All_Perc","Female_Ses_Perc","Male_Ses_Perc"))
+
+datatable(prop2,rownames = FALSE,caption='Total Counts and Percentiles of Symptoms per Gender')
+
+g<-as.data.frame(table(final_df$gender))
+props<-merge(g,prop,by.x="Var1",by.y="gender",all=TRUE)
+
+prop_fun<-function(x,y){
+  a<-x[,grep(y,names(x))] 
+  p<<-lapply(a[,c(1:9)],function(x)prop.test(t(as.matrix(x,g$Freq)))) #proptest with subset functioning
+}
+
+test<-lapply(prop_pre_post[,c(3:73)],function(x)prop.test(t(as.matrix(x,prop_pre_post$Freq)))$`p.value`)
+
+#Running proportional tests on the frequencies of symptoms(appointments), males and females typically differed significantly at all time points symptoms. However, differences in stress were not significant before nor after date of injury.  
+
+```
+
+
+##Gender Difference Graphics
+
+```{r traj, include=TRUE,fig.height=10,fig.width=10}
+deltas<-final_df[,c(5,80:111)] #subset all deltas 
+
+sub_box<-function(x,y){
+  x<-x%>% 
+    gather(surveys,score,-gender)%>%
+    filter(gender==c("MALE","FEMALE"))%>%
+    filter(grepl(y,surveys))
+  x$surveys<-sub(y,"",x$surveys)
+  ggplot(x,aes(fill=gender))+geom_boxplot(aes(x=surveys,y=score))
+}
+#sub_box(deltas,"\\_30_delta")
+test<-deltas%>%
+  gather(surveys,score,-gender)%>%
+  filter(gender==c("MALE","FEMALE"))%>%
+  filter(grepl("cognitive_30",surveys))
+#ggplot(test,aes(fill=gender))+geom_histogram(aes(x=score))
+
+subs_a<-function(df,x){ 
+  x<-df[,grep(x,names(df))]
+  x<-x%>% summarise_all(funs(means))%>%
+    gather()
+  ggplot(x)+geom_bar(aes(reorder(x=key,-value),y=value),stat="identity",position = "dodge",fill="navyblue")+xlab("Symptoms")+ylab("Average Symptom")+scale_y_continuous(expand = c(0, 0))+
+    theme(plot.title=element_text(hjust=0.5,vjust=1),axis.text.x=element_text(size=8, angle=45,hjust=0.95,vjust=0.1,margin=margin(-40,0,40,0)))
+}
+
+pp<-final_df[,-c(1:4,6,7,80:111)]
+pp<-pp%>%
+  gather(surveys,score,-gender)%>%
+  filter(gender==c("MALE","FEMALE"))%>%
+  separate(surveys,c("session","symptom","interval"),"_")%>%
+  mutate(interval=ifelse(session=="pre",as.numeric(interval)*-1,as.numeric(interval)))
+  
+pp_all<-pp%>%
+  group_by(gender,interval,symptom)%>%
+  summarise(mean=means(score))
+
+ggplot(pp_all,aes(fill=gender))+geom_point(aes(x=interval,y=mean,colour=symptom,shape=gender),size=3)+geom_vline(xintercept=0,size=1)+geom_text(aes(-55,1,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+
+  xlab("Days since Injury")+ylab("Average Number of Symptoms")+ggtitle("Changes in Average Symptoms per Gender")+theme(plot.title=element_text(hjust=0.5))
+
+pp_tot<-pp%>%
+  group_by(gender,interval,symptom)%>%
+  summarise(mean=sums(score))
+
+#ggplot(pp_tot,aes(fill=gender))+geom_point(aes(x=interval,y=mean,colour=symptom,shape=gender),size=3)+geom_vline(xintercept=0,size=1)+geom_text(aes(-55,10000,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+
+xlab("Days since Injury")+ylab("Total Number of Symptoms")+ggtitle("Changes in Total Symptoms per Gender")+theme(plot.title=element_text(hjust=0.5))
+
+pp_ave<-pp%>%
+  group_by(gender,interval)%>%
+  summarise(mean=means(score))
+
+ggplot(pp_ave,aes(fill=gender))+geom_point(aes(x=interval,y=mean,colour=gender),size=3)+geom_vline(xintercept=0,size=1)+geom_text(aes(-55,0.41,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+
+  xlab("Days since Injury")+ylab("Average Number of Symptoms")+ggtitle("Overall Changes in Average Symptoms per Gender")+theme(plot.title=element_text(hjust=0.5))
+
+```
+
+
+#Gender Comparisons 
+&nbsp; Anaysis of Gender Differences 
+
+##Gender Delta Testing 
+
+```{r gender analysis, include=TRUE}
+d<-final_df[,c(1,5,80:111)]
+d<-d%>%
+  gather(symptom,score,-gender,-patient_hsdw_nk)%>%
+  separate(symptom,c("symptom","session","interval"),"_")%>%
+  select(-interval)
+
+d$score<-as.numeric(d$score)
+
+d<-d%>%
+  filter(symptom=="cognitive")
+#hist(d$score)
+
+#m1<-lmer(score~gender*session +(1|patient_hsdw_nk),data=d)
+#summary(m1)
+
+```
+
+
+##Delta Post Injury Testing 
+
+```{r delta testing, include=TRUE}
+d<-final_df[,c(1,5,8:79)]
+d<-d%>%
+  gather(symptom,score,-gender,-patient_hsdw_nk)%>%
+  separate(symptom,c("session","symptom","interval"),"_")%>%
+  filter(session=="pos")
+
+d$score<-as.numeric(d$score)
+
+#mp1<-glmer(score~gender*interval+(1|patient_hsdw_nk),family=poisson,data=d)
+
+```
+
+
+#Ad Hoc Analysis 
+
+#Proprtional Symptoms {.tabset}
+
+##Depression
+```{r depression, include=TRUE}
+means<-function(x){
+  round(mean(x,na.rm=TRUE),3)
+}
+
+gd<-final_df[,c(5,8:79)]
+gd<-gd%>%
+  gather(symptom,score,-gender)%>%
+  separate(symptom,c("session","symptom","interval"),"_")
+gd$score<-ifelse(gd$score>=1,1,ifelse(gd$score==0,0,NA))
+gd$symptom<-gsub("^(\\w)(\\w+)", "\\U\\1\\L\\2",gd$symptom, perl = TRUE)
+gd$session<-ifelse(gd$session=="pos","Post","Pre")
+
+sub_symp<-function(symp,int){
+  df<-gd
+  a<-df%>%
+    filter(symptom==symp)%>%
+    filter(interval==int)%>%
+    group_by(gender,session,interval)%>%
+    summarise(prop=means(score))%>%
+    mutate(prop=prop*100)
+  a$session<-factor(a$session,levels=c("Pre","Post"))
+  title<-paste("Proportion of Patients with",symp, "at",int,"Days",sep=" ")
+  max=10*ceiling(max(a$prop)/10)
+  ggplot(a,aes(fill=session))+geom_bar(aes(x=gender,y=prop,colour=session),stat='identity',position='dodge')+theme(plot.title=element_text(hjust=0.5,vjust=1))+ggtitle(title)+xlab("Gender")+
+    ylab("Proportion of Patients")+scale_y_continuous(expand=c(0,0),breaks=scales::pretty_breaks())+expand_limits(y=max+10)
+}
+
+symps<-list("Depression","Anxiety","Vision","Ptsd","Cognitive","Headache","Neurologic","Sleep","Stress")
+inter<-list(30,90,180,365)
+
+lapply(inter,function(x)sub_symp("Depression",x))
+```
+
+##Anxiety
+```{r anxiety, include=TRUE}
+lapply(inter,function(x)sub_symp("Anxiety",x))
+```
+
+##Cognitive
+```{r cog, include=TRUE}
+lapply(inter,function(x)sub_symp("Cognitive",x))
+```
+
+##Headache
+```{r headache, include=TRUE}
+lapply(inter,function(x)sub_symp("Headache",x))
+```
+
+##Neurologic
+```{r neuro, include=TRUE}
+lapply(inter,function(x)sub_symp("Neurologic",x))
+```
+
+##PTSD
+```{r ptsd, include=TRUE}
+lapply(inter,function(x)sub_symp("Ptsd",x))
+```
+
+##Sleep
+```{r sleep, include=TRUE}
+lapply(inter,function(x)sub_symp("Sleep",x))
+```
+
+##Stress
+```{r stress, include=TRUE}
+sub_st<-function(symp,int){
+  df<-gd
+  a<-df%>%
+    filter(symptom==symp)%>%
+    filter(interval==int)%>%
+    group_by(gender,session,interval)%>%
+    summarise(prop=means(score))%>%
+    mutate(prop=prop*100)
+  a$session<-factor(a$session,levels=c("Pre","Post"))
+  title<-paste("Proportion of Patients with",symp, "at",int,"Days",sep=" ")
+  max=round(max(a$prop),0)
+  names(a)[2]<-paste("Session")
+  ggplot(a,aes(fill=Session))+geom_bar(aes(x=gender,y=prop,colour=Session),stat='identity',position='dodge')+theme(plot.title=element_text(hjust=0.5,vjust=1))+ggtitle(title)+xlab("Gender")+
+    ylab("Proportion of Patients")+scale_y_continuous(expand=c(0,0),breaks = scales::pretty_breaks())+expand_limits(y=max+1)
+}
+
+lapply(inter,function(x)sub_st("Stress",x))
+```
+
+##Vision
+```{r vision, include=TRUE}
+lapply(inter,function(x)sub_symp("Vision",x))
+```
+
+##Separate Graphs - UPDATED
+```{r coll gender, include=TRUE}
+subs_gender<-function(int,gen){
+  g<-gd%>%
+  filter(interval==int)%>%
+  filter(gender==gen)%>%
+  group_by(gender,session,symptom)%>%
+  summarise(mean=means(score)*100)
+  g$session<-factor(g$session,levels=c("Pre","Post"))
+  max=10*ceiling(max(g$mean)/10)
+  title<-paste("Proportion of Symptoms at", int,"Days - ",gen,sep=" ")
+  ggplot(g,aes(fill=session))+geom_bar(aes(reorder(x=symptom,-mean),y=mean,colour=session),stat="identity",position="dodge")+xlab("Symptoms")+ylab("Proportion of Patients")+scale_y_continuous(expand = c(0, 0))+theme(plot.title=element_text(hjust=0.5,vjust=1),axis.text.x=element_text(size=8, angle=45,hjust=0.95,vjust=0.1,margin=margin(-20,0,20,0)))+expand_limits(y=50)+ggtitle(title)
+}
+
+#subs_gender("30")
+#mapply(subs_gender,int=c(30,90),gen=c("FEMALE","MALE"))
+
+subs_gen<-function(int){
+  g<-gd%>%
+  filter(interval==int)%>%
+  group_by(gender,session,symptom)%>%
+  summarise(mean=means(score)*100)
+  g$session<-factor(g$session,levels=c("Pre","Post"))
+  max=10*ceiling(max(g$mean)/10)
+  title<-paste("Proportion of Symptoms at", int,"Days",sep=" ")
+  ggplot(g,aes(fill=session))+geom_bar(aes(reorder(x=symptom,-mean),y=mean,colour=session),stat="identity",position="dodge")+xlab("Symptoms")+ylab("Proportion of Patients")+scale_y_continuous(expand = c(0, 0))+theme(plot.title=element_text(hjust=0.5,vjust=1),axis.text.x=element_text(size=8, angle=45,hjust=0.95,vjust=0.1,margin=margin(-20,0,20,0)))+expand_limits(y=50)+ggtitle(title)
+}
+
+
+lapply(c(30,90,180,365),function(x)subs_gen(x))
+lapply(c(30,90,180,365),function(x)subs_gender(x,"MALE"))
+lapply(c(30,90,180,365),function(x)subs_gender(x,"FEMALE"))
+
+```
+
+#Symptom Trajectory {.tabset}
+
+##Trajectory per Symptom
+
+```{r traj prop, include=TRUE}
+pp<-final_df[,-c(1:4,6,7,80:111)]
+pp<-pp%>%
+  gather(surveys,score,-gender)%>%
+  filter(gender==c("MALE","FEMALE"))%>%
+  separate(surveys,c("session","symptom","interval"),"_")%>%
+  mutate(interval=ifelse(session=="pre",as.numeric(interval)*-1,as.numeric(interval)))%>%
+  mutate(Session=ifelse(session=="pre","Pre","Post"))
+
+
+pp_all<-pp%>%
+  mutate(score=ifelse(score>=1,1,0))%>%
+  group_by(gender,interval,symptom)%>%
+  summarise(mean=means(score))%>%
+  mutate(mean=mean*100)
+pp_all$symptom<-gsub("^(\\w)(\\w+)", "\\U\\1\\L\\2",pp_all$symptom, perl = TRUE)
+
+traj<-function(x){
+  df<-pp_all%>%
+    filter(symptom==x)
+  title<-paste("Proportion of Patients with",x, "per Gender",sep=" ")
+  max=10*ceiling(max(df$mean)/10)
+  names(df)[1]<-paste("Gender")
+  ggplot(df)+geom_point(aes(x=interval,y=mean,shape=Gender,colour=Gender),size=4)+geom_vline(xintercept=0,size=1)+geom_text(aes(-80,max-1,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+
+    xlab("Days since Injury")+ylab("Proportion of Patients")+ggtitle(title)+theme(plot.title=element_text(hjust=0.5))+scale_y_continuous(expand=c(0,0),breaks=scales::pretty_breaks())+expand_limits(y=c(0,max))
+  
+}
+
+lapply(symps[-9],function(x)traj(x))
+
+traj_st<-function(x){
+  df<-pp_all%>%
+    filter(symptom==x)
+  title<-paste("Proportion of Patients with",x, "per Gender",sep=" ")
+  names(df)[1]<-paste("Gender")
+  max=1*ceiling(max(df$mean)/1)
+  names(df)[1]<-paste("Gender")
+  ggplot(df)+geom_point(aes(x=interval,y=mean,shape=Gender,colour=Gender),size=4)+geom_vline(xintercept=0,size=1)+geom_text(aes(-80,max-.15,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+
+    xlab("Days since Injury")+ylab("Proportion of Patients")+ggtitle(title)+theme(plot.title=element_text(hjust=0.5))+scale_y_continuous(expand=c(0,0),breaks=scales::pretty_breaks())+expand_limits(y=c(0,max))
+}
+
+traj_st("Stress")
+
+```
+
+##Trajectory per Gender - All
+
+```{r traj prop whole,include=TRUE,fig.height=10,fig.width=10}
+m<-round(max(pp_all$mean))
+
+ggplot(pp_all,aes(fill=gender))+geom_point(aes(x=interval,y=mean,colour=symptom,shape=gender),size=4)+geom_vline(xintercept=0,size=1)+geom_text(aes(-60,55,label="Date of Injury"))+scale_x_continuous(breaks=c(-365,-180,-90,-30,30,90,180,365))+xlab("Days since Injury")+ylab("Proportion of Patients")+ggtitle("Changes in the Proportion of Patient Symptoms per Gender")+theme(plot.title=element_text(hjust=0.5))+expand_limits(y=m)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
